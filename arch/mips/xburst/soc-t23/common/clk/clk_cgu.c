@@ -281,9 +281,7 @@ static int cgu_set_rate(struct clk *clk, unsigned long rate)
 			cgu_clks[no].cache = x;
 		}
 		clk->rate = tmp  / (i + 1);
-	}
-	else if((mask & reg_val) != i){
-
+	} else if((mask & reg_val) != i) {
 		x = (x & ~(0x1 << stop)) | (0x1 << ce);
 		cpm_outl(x, cgu_clks[no].off);
 		while(cpm_test_bit(busy,cgu_clks[no].off))
@@ -294,6 +292,9 @@ static int cgu_set_rate(struct clk *clk, unsigned long rate)
 		clk->rate = tmp  / (i + 1);
 	}
 	spin_unlock_irqrestore(&cpm_cgu_lock,flags);
+    if(clk->parent->rate%rate != 0){
+        printk(KERN_WARNING"%s can not set to %ld, will change!!!\n", clk->name, rate);
+    }
 	return 0;
 }
 

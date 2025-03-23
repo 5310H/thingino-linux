@@ -115,7 +115,7 @@ static int pll_set_rate(struct clk *clk,unsigned long rate)
 	unsigned int cpxpcr,cpccr;
 	struct pll_rate_setting *p=NULL;
 	unsigned long flags;
-	unsigned int timeout = 0x1ffff;
+	unsigned int timeout = 0x5;
 
 	if(strcmp(clk->name, "mpll") == 0){
 		printk("\033[31m mpll not support set!!!\033[37m\n");
@@ -137,10 +137,11 @@ static int pll_set_rate(struct clk *clk,unsigned long rate)
 			cpccr = cpm_inl(0x0);
 			cpccr &=~(3<<30);
 			cpccr |=1<<30;
-			cpm_outl(cpccr,0x0);
+			cpm_outl(cpccr,CPM_CPCCR);
 		}
 		p = cal_pll_setting(rate);
 		if(p) {
+            printk(KERN_WARNING"Warning: sclk freq will change gate=0x%x gate1=0x%x!!!!!\n", cpm_inl(CPM_CLKGR),cpm_inl(CPM_CLKGR1));
 			cpxpcr &= ~1;
 			cpm_outl(cpxpcr,CLK_PLL_NO(clk->flags));
 
@@ -167,7 +168,7 @@ static int pll_set_rate(struct clk *clk,unsigned long rate)
 			cpccr = cpm_inl(0x0);
 			cpccr &=~(3<<30);
 			cpccr |=2<<30;
-			cpm_outl(cpccr,0x0);
+			cpm_outl(cpccr, CPM_CPCCR);
 		}
 	}
 

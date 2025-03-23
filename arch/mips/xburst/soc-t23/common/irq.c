@@ -195,7 +195,11 @@ static void intc_irq_dispatch(void)
 	ipr[1] &= ~0x1c0f0000;
 
 	if (ipr[0]) {
-		do_IRQ(ffs(ipr[0]) -1 +IRQ_INTC_BASE);
+		if(ipr[0] & (1<<29)) {
+			do_IRQ(29 +IRQ_INTC_BASE);
+		} else {
+			do_IRQ(ffs(ipr[0]) -1 +IRQ_INTC_BASE);
+		}
 	}
 	if (gpr[0]) {
 		generic_handle_irq(ffs(gpr[0]) -1 +IRQ_INTC_BASE);
