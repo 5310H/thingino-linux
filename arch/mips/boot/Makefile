@@ -49,16 +49,26 @@ UIMAGE_ENTRYADDR = $(VMLINUX_ENTRY_ADDRESS)
 
 ifeq ($(CONFIG_KERNEL_LZMA),y)
   uImage_compress_type = lzma
-else
+else ifeq ($(CONFIG_KERNEL_GZIP),y)
   uImage_compress_type = gzip
+else ifeq ($(CONFIG_KERNEL_JZ_LZMA),y)
+  uImage_compress_type = jzlzma
 endif
+
+# extra-y += vmlinux.bin.$(uImage_compress_type)
 
 $(obj)/vmlinux.bin.$(uImage_compress_type): $(obj)/vmlinux.bin FORCE
 	$(call if_changed,$(uImage_compress_type))
 
 targets += uImage.$(uImage_compress_type)
+ifeq ($(CONFIG_KERNEL_JZ_LZMA),y)
+$(obj)/uImage.$(uImage_compress_type): $(obj)/vmlinux.bin.$(uImage_compress_type) FORCE
+	$(call if_changed,jzuimage,none)
+	$(call if_changed,jzhead)
+else
 $(obj)/uImage.$(uImage_compress_type): $(obj)/vmlinux.bin.$(uImage_compress_type) FORCE
 	$(call if_changed,uimage,$(uImage_compress_type))
+endif
 
 targets += uImage
 $(obj)/uImage: $(obj)/uImage.$(uImage_compress_type) FORCE

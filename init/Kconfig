@@ -92,6 +92,9 @@ config HAVE_KERNEL_BZIP2
 config HAVE_KERNEL_LZMA
 	bool
 
+config HAVE_KERNEL_JZ_LZMA
+	bool
+
 config HAVE_KERNEL_XZ
 	bool
 
@@ -101,7 +104,7 @@ config HAVE_KERNEL_LZO
 choice
 	prompt "Kernel compression mode"
 	default KERNEL_GZIP
-	depends on HAVE_KERNEL_GZIP || HAVE_KERNEL_BZIP2 || HAVE_KERNEL_LZMA || HAVE_KERNEL_XZ || HAVE_KERNEL_LZO
+	depends on HAVE_KERNEL_GZIP || HAVE_KERNEL_BZIP2 || HAVE_KERNEL_LZMA || HAVE_KERNEL_XZ || HAVE_KERNEL_LZO || HAVE_KERNEL_JZ_LZMA
 	help
 	  The linux kernel is a kind of self-extracting executable.
 	  Several compression algorithms are available, which differ
@@ -144,6 +147,15 @@ config KERNEL_LZMA
 	  This compression algorithm's ratio is best.  Decompression speed
 	  is between gzip and bzip2.  Compression is slowest.
 	  The kernel size is about 33% smaller with LZMA in comparison to gzip.
+
+config KERNEL_JZ_LZMA
+	bool "JZ_LZMA"
+	depends on HAVE_KERNEL_JZ_LZMA
+	help
+	  This compression algorithm's ratio is best.  Decompression speed
+	  is between gzip and bzip2.  Compression is slowest.
+	  The kernel size is about 33% smaller with JZLZMA in comparison to gzip.
+
 
 config KERNEL_XZ
 	bool "XZ"
