@@ -670,6 +670,8 @@ static long soc_vpu_start(struct soc_channel *sc, struct channel_node *cnode)
 		if (ret < 0) {
 			dev_err(sc->mdev.this_device, "[fun:%s,line:%d] set vpu param failed\n", __func__, __LINE__);
 			goto err_start_vpu;
+		} else if (ret == 0x2) {
+			goto err_start_vpu;
 		}
 		spin_lock_irqsave(&vlist->slock, vlflag);
 		vlist->phase = RUN_VPU;
@@ -777,8 +779,11 @@ static long soc_channel_run(struct soc_channel *sc, long usr_arg)
 	}
 
 	soc_channel_flush_cache_all(sc, &cnode);
-	if ((ret = soc_vpu_start(sc, &cnode)) < 0) {
+	ret = soc_vpu_start(sc, &cnode);
+	if (ret < 0) {
 		dev_err(sc->mdev.this_device, "[fun:%s,line:%d] start vpu failed\n", __func__, __LINE__);
+		goto err_vpu_start_vpu;
+	} else if (ret == 0x2) {
 		goto err_vpu_start_vpu;
 	}
 
