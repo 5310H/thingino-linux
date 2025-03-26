@@ -7,11 +7,9 @@
 #include <soc/base.h>
 #include <soc/cpm.h>
 #include <asm/delay.h>
+//#include <mach/jzcpm_pwc.h>
 #include <linux/interrupt.h>
 #include <linux/delay.h>
-#include <linux/proc_fs.h>
-#include <linux/seq_file.h>
-#include <jz_proc.h>
 
 #include "../soc_vpu.h"
 #include "helix.h"
@@ -19,19 +17,11 @@
 
 //#define DUMP_HELIX_REG
 
-#ifdef CONFIG_SOC_T23
-static int timeoffset = 50;
-static int data_threshold = 500;
-#endif
-
 struct jz_vpu_helix {
 	struct vpu          vpu;
 	char                name[16];
 	int                 irq;
 	void __iomem        *iomem;
-#ifdef CONFIG_SOC_T23
-	void __iomem        *iomem_ivdc;
-#endif
 	struct clk          *clk;
 	struct clk          *clk_gate;
 	struct clk          *ahb1_gate;
@@ -78,9 +68,7 @@ static long vpu_open(struct device *dev)
 		return -EBUSY;
 
 	clk_enable(vpu->clk);
-#ifndef CONFIG_SOC_T23
 	clk_enable(vpu->ahb1_gate);
-#endif
 	clk_enable(vpu->clk_gate);
 	//cpm_pwc_enable(vpu->cpm_pwc);
 
@@ -118,9 +106,9 @@ static long vpu_release(struct device *dev)
 
 	cpm_clear_bit(CPM_HELIX_SR(vpu->vpu.idx),CPM_SRBC);
 
-	clk_disable(vpu->clk);
-	clk_disable(vpu->clk_gate);
 #ifndef CONFIG_SOC_T23
+    clk_disable(vpu->clk);
+	clk_disable(vpu->clk_gate);
 	clk_disable(vpu->ahb1_gate);
 #endif
 	//cpm_pwc_disable(vpu->cpm_pwc);
@@ -177,15 +165,8 @@ void helix_show_internal_state(struct jz_vpu_helix *vpu)
 
 static long vpu_start(struct device *dev, const struct channel_node * const cnode)
 {
-#ifdef CONFIG_SOC_T23
-	unsigned int isp_y_ddr_line_cnt = 0;
-	unsigned int v0_ddr_y_grp_line = 0;
-	unsigned int valid_data_line = 0;
-	unsigned int overflow_cnt = 0;
-#endif
 	struct jz_vpu_helix *vpu = dev_get_drvdata(dev);
 	//struct channel_list *clist = list_entry(cnode->clist, struct channel_list, list);
-
 
 #ifdef DUMP_HELIX_REG
 	dev_info(vpu->vpu.dev, "------%s(%d)helix_show_internal_state start------\n", __func__, __LINE__);
@@ -193,59 +174,21 @@ static long vpu_start(struct device *dev, const struct channel_node * const cnod
 	dev_info(vpu->vpu.dev, "------%s(%d)helix_show_internal_state end------\n", __func__, __LINE__);
 #endif
 
-#ifdef CONFIG_SOC_T23
-	unsigned long slock_flag = 0;
-	spin_lock_irqsave(&vpu->slock, slock_flag);
-#endif
-
     vpu_writel(vpu, REG_SCH_GLBC, SCH_GLBC_HIAXI | SCH_INTE_RESERR | SCH_INTE_ACFGERR
             | SCH_INTE_BSERR | SCH_INTE_ENDF);
 
 #ifdef CONFIG_SOC_T23
 	if (cnode->frame_type == FRAME_TYPE_IVDC) {
-		overflow_cnt = readl(vpu->iomem_ivdc+0x2c);
-		if (overflow_cnt > 0) {
-			if (overflow_cnt > cnode->overflow_cnt) {
-				spin_unlock_irqrestore(&vpu->slock, slock_flag);
-				printk("overflow_cnt = %d, cnode_overflow_cnt = %d\n",overflow_cnt,cnode->overflow_cnt);
-				goto enc_cancel;
-			}
-		}
-
-		struct timespec ts;
-		getrawmonotonic(&ts);
-		uint64_t time =  ts.tv_sec*1000 + ts.tv_nsec / 1000 / 1000;
-		if (cnode->time > 0) {
-			if ((time - cnode->time) > timeoffset) {
-				spin_unlock_irqrestore(&vpu->slock, slock_flag);
-				printk("time = %lld, timeoffset = %d\n",time - cnode->time, timeoffset);
-				goto enc_cancel;
-			}
-		}
-
-		isp_y_ddr_line_cnt = readl(vpu->iomem_ivdc+0x208);
-		v0_ddr_y_grp_line = readl(vpu->iomem_ivdc+0x3a8);
-		if (((isp_y_ddr_line_cnt >> 16) & (1 << 15)) == (v0_ddr_y_grp_line & (1 << 15))) {
-			valid_data_line = ((isp_y_ddr_line_cnt >> 16)&0x7fff) - (v0_ddr_y_grp_line & 0x7fff);
-		} else {
-			valid_data_line = ((isp_y_ddr_line_cnt >> 16)&0x7fff) + cnode->ivdc_mem_line - (v0_ddr_y_grp_line & 0x7fff);
-		}
-		if (valid_data_line > data_threshold) {
-			spin_unlock_irqrestore(&vpu->slock, slock_flag);
-			printk("valid_data_line = %d,data_threshold = %d\n",valid_data_line, data_threshold);
-			goto enc_cancel;
-		}
-
-		writel(1, vpu->iomem_ivdc+0x78);
-		writel(1, vpu->iomem_ivdc+0x70);
+		void *ivdc_iomap = ioremap(IVDC_BASE_ADDR, 0x1000);
+		writel(1, ivdc_iomap+0x78);
+		writel(1, ivdc_iomap+0x70);
+		iounmap(ivdc_iomap);
 	}
 #endif
 
 #if defined(CONFIG_SOC_T21) || defined(CONFIG_SOC_T23)
 	vpu_writel(vpu, REG_VDMA_TASKRG_T21, VDMA_ACFG_DHA(cnode->dma_addr)
 			| VDMA_ACFG_RUN);
-
-	spin_unlock_irqrestore(&vpu->slock, slock_flag);
 #else
 	vpu_writel(vpu, REG_VDMA_TASKRG, VDMA_ACFG_DHA(cnode->dma_addr)
 			| VDMA_ACFG_RUN);
@@ -253,10 +196,6 @@ static long vpu_start(struct device *dev, const struct channel_node * const cnod
 	dev_dbg(vpu->vpu.dev, "[%d:%d] start vpu\n", current->tgid, current->pid);
 
 	return 0;
-#ifdef CONFIG_SOC_T23
-enc_cancel:
-	return 0x2;
-#endif
 }
 
 static long vpu_wait_complete(struct device *dev, struct channel_node * const cnode)
@@ -378,64 +317,11 @@ static irqreturn_t vpu_interrupt(int irq, void *dev)
 	return IRQ_HANDLED;
 }
 
-static ssize_t vpu_cmd_set(struct file *file, const char __user *buffer, size_t count, loff_t *f_pos)
-{
-	int cmd_time = 0;
-	int cmd_data_shreshold = 0;
-	char *t = 0;
-
-	char *buf = kzalloc((count+1), GFP_KERNEL);
-	if(!buf) {
-		return -ENOMEM;
-	}
-
-	if(copy_from_user(buf, buffer, count))
-	{
-		kfree(buf);
-		return EFAULT;
-	}
-	cmd_time = simple_strtoull(buf, &t, 0);
-	if (cmd_time > 0) {
-		timeoffset = cmd_time;
-	}
-
-	cmd_data_shreshold = simple_strtoull(t + 1, NULL, 0);
-	if (cmd_data_shreshold > 0) {
-		data_threshold = cmd_data_shreshold;
-	}
-
-	printk("timeoffset = %d, data_threshold = %d\n", timeoffset, data_threshold);
-
-	kfree(buf);
-	return count;
-}
-
-static int vpu_cmd_show(struct seq_file *m, void *v)
-{
-	int len = 0;
-	len += seq_printf(m ,"timeoffset = %d, data_threshold = %d\n", timeoffset, data_threshold);
-	return len;
-}
-
-static int vpu_cmd_open(struct inode *inode, struct file *file)
-{
-	return single_open_size(file, vpu_cmd_show, PDE_DATA(inode),8192);
-}
-
-static const struct file_operations vpu_cmd_fops ={
-	.read = seq_read,
-	.open = vpu_cmd_open,
-	.llseek = seq_lseek,
-	.release = single_release,
-	.write = vpu_cmd_set,
-};
-
 static int vpu_probe(struct platform_device *pdev)
 {
 	int ret;
 	struct resource	*regs;
 	struct jz_vpu_helix *vpu;
-	struct proc_dir_entry *proc;
 
 	vpu = kzalloc(sizeof(struct jz_vpu_helix), GFP_KERNEL);
 	if (!vpu) {
@@ -468,14 +354,6 @@ static int vpu_probe(struct platform_device *pdev)
 		ret = -ENXIO;
 		goto err_get_vpu_iomem;
 	}
-#ifdef CONFIG_SOC_T23
-	vpu->iomem_ivdc = ioremap(IVDC_BASE_ADDR, 0x1000);
-	if (!vpu->iomem_ivdc) {
-		dev_err(&pdev->dev, "ioremap_ivdc failed\n");
-		ret = -ENXIO;
-		goto err_get_vpu_iomem_ivdc;
-	}
-#endif
 
 #ifndef CONFIG_SOC_T23
 	vpu->ahb1_gate = clk_get(&pdev->dev, "ahb1");
@@ -539,12 +417,6 @@ static int vpu_probe(struct platform_device *pdev)
 	}
 	platform_set_drvdata(pdev, vpu);
 
-	proc = jz_proc_mkdir("helix");
-	if (!proc) {
-		printk("create helix_cmd info failed!\n");
-	}
-	proc_create_data("param", S_IRUGO, proc, &vpu_cmd_fops, NULL);
-
 	return 0;
 
 err_vpu_register:
@@ -558,15 +430,9 @@ err_vpu_request_irq:
 err_get_vpu_clk_cgu:
 	clk_put(vpu->clk_gate);
 err_get_vpu_clk_gate:
-#ifndef CONFIG_SOC_T23
 	clk_put(vpu->ahb1_gate);
-#endif
 err_get_ahb1_clk_gate:
-#ifdef CONFIG_SOC_T23
-	iounmap(vpu->iomem_ivdc);
-err_get_vpu_iomem_ivdc:
 	iounmap(vpu->iomem);
-#endif
 err_get_vpu_iomem:
 err_get_vpu_resource:
 err_get_vpu_irq:
@@ -582,15 +448,10 @@ static int vpu_remove(struct platform_device *dev)
 	vpu_unregister(&vpu->vpu.vlist);
 	//cpm_pwc_put(vpu->cpm_pwc);
 	free_irq(vpu->irq, vpu);
-	clk_put(vpu->clk);
+    clk_put(vpu->clk);
 	clk_put(vpu->clk_gate);
-#ifndef CONFIG_SOC_T23
 	clk_put(vpu->ahb1_gate);
-#endif
 	iounmap(vpu->iomem);
-#ifdef CONFIG_SOC_T23
-	iounmap(vpu->iomem_ivdc);
-#endif
 	kfree(vpu);
 
 	return 0;
