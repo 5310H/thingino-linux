@@ -186,6 +186,7 @@ static long vpu_start(struct device *dev, const struct channel_node * const cnod
 	struct jz_vpu_helix *vpu = dev_get_drvdata(dev);
 	//struct channel_list *clist = list_entry(cnode->clist, struct channel_list, list);
 
+
 #ifdef DUMP_HELIX_REG
 	dev_info(vpu->vpu.dev, "------%s(%d)helix_show_internal_state start------\n", __func__, __LINE__);
 	helix_show_internal_state(vpu);
@@ -244,9 +245,7 @@ static long vpu_start(struct device *dev, const struct channel_node * const cnod
 	vpu_writel(vpu, REG_VDMA_TASKRG_T21, VDMA_ACFG_DHA(cnode->dma_addr)
 			| VDMA_ACFG_RUN);
 
-#ifdef CONFIG_SOC_T23
 	spin_unlock_irqrestore(&vpu->slock, slock_flag);
-#endif
 #else
 	vpu_writel(vpu, REG_VDMA_TASKRG, VDMA_ACFG_DHA(cnode->dma_addr)
 			| VDMA_ACFG_RUN);
@@ -379,7 +378,6 @@ static irqreturn_t vpu_interrupt(int irq, void *dev)
 	return IRQ_HANDLED;
 }
 
-#ifdef CONFIG_SOC_T23
 static ssize_t vpu_cmd_set(struct file *file, const char __user *buffer, size_t count, loff_t *f_pos)
 {
 	int cmd_time = 0;
@@ -431,16 +429,13 @@ static const struct file_operations vpu_cmd_fops ={
 	.release = single_release,
 	.write = vpu_cmd_set,
 };
-#endif
 
 static int vpu_probe(struct platform_device *pdev)
 {
 	int ret;
 	struct resource	*regs;
 	struct jz_vpu_helix *vpu;
-#ifdef CONFIG_SOC_T23
 	struct proc_dir_entry *proc;
-#endif
 
 	vpu = kzalloc(sizeof(struct jz_vpu_helix), GFP_KERNEL);
 	if (!vpu) {
@@ -544,13 +539,11 @@ static int vpu_probe(struct platform_device *pdev)
 	}
 	platform_set_drvdata(pdev, vpu);
 
-#ifdef CONFIG_SOC_T23
 	proc = jz_proc_mkdir("helix");
 	if (!proc) {
 		printk("create helix_cmd info failed!\n");
 	}
 	proc_create_data("param", S_IRUGO, proc, &vpu_cmd_fops, NULL);
-#endif
 
 	return 0;
 
