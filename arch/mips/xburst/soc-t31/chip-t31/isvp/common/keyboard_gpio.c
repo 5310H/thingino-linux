@@ -2,7 +2,14 @@
 
 #include <linux/gpio_keys.h>
 #include <linux/input.h>
+#include <linux/device.h>
 #include "board_base.h"
+
+/* Platform device release function to avoid kernel warning */
+static void jz_button_device_release(struct device *dev)
+{
+	/* Nothing to do here - the device data is statically allocated */
+}
 
 struct gpio_keys_button __attribute__((weak)) board_buttons[] = {
 #ifdef GPIO_HOME
@@ -138,6 +145,7 @@ struct platform_device jz_button_device = {
 	.num_resources	= 0,
 	.dev		= {
                 .platform_data	= &board_button_data,
+                .release	= jz_button_device_release,
 	}
 };
 
